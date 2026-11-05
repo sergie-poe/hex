@@ -62,6 +62,8 @@ impl Feature {
             | Self::HideMenuBarIcon
             | Self::QuitClosesWindow
             | Self::SettingsSearch
+            | Self::FinishWithReturn
+            | Self::SendAfterPasting
             | Self::Playground => Group::Dictation,
             Self::SmartSpacing
             | Self::SpokenFormatting

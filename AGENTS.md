@@ -44,8 +44,9 @@ installed, and a stable build with the driver keeps its pane for Uninstall
 alone), Playground (Dev), Live text, Live chapters, Vocabulary biasing, Switch
 model with keyboard language (#216), Mouse shortcuts (#209, macOS), Also
 pause the browser (#301, macOS), Share dictation shortcut (#176, Windows),
-Unload model when idle (#442), Terminal paste (Windows), and Terminal paste
-shortcut (Windows, Linux). Externally contributed features land there too.
+Unload model when idle (#442), Terminal paste (Windows), Terminal paste
+shortcut (Windows, Linux), and Finish with Return and Send after pasting
+(#1104, macOS). Externally contributed features land there too.
 Annotate is a normal feature in every build, stable included, on macOS,
 Linux, and Windows; only developer tools (`dev_build::is_dev_build()` with
 `DEVELOPER_FEATURES_ENABLED`) stay gated to dev builds.
@@ -745,6 +746,16 @@ CoreAudio formats, AppleScript details, or event serialization.
   dictation finishes and pastes; only short taps, chords, and silent captures
   discard, and Hex itself ends a capture only when its input or microphone is
   lost.
+- With Labs › Finish with Return on (macOS), Return, or keypad Enter, with no
+  modifier, finishes a **locked** dictation exactly as the shortcut's second
+  tap does (same `action_at`, release tail, and Paste or raw target). One
+  arming decision (`recognition/finish.rs`, set every loop pass) drives both
+  the shortcut machines and the event tap, so a disarmed Return is neither
+  swallowed nor acted on; it is never armed while a Tap press is held, idle,
+  or during a programmatic dictation, and a cancel shortcut bound to Return
+  wins. With Labs › Send after pasting also on, a dictation finished by Return
+  presses Return once after its paste lands, only if the app it started in
+  (`Hotkeys::start_app`) is still in front.
 - A dictation discarded for silence (level under the silence threshold, or no
   speech the detector hears) is discarded quietly on every OS: no error tone,
   no note, nothing in Settings. The log keeps the measured level and peak

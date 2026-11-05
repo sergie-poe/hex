@@ -290,6 +290,12 @@ pub fn post_command(character: char) -> Result<()> {
     post_key_code(key_code, &[(COMMAND_FLAG, COMMAND_KEY_CODE)], 1)
 }
 
+/// Presses Return once, with no modifier: Labs › Send after pasting. Its
+/// events carry `SYNTHETIC_EVENT_MARKER`, so Hex's own taps ignore them.
+pub fn post_return() -> Result<()> {
+    post_key_code(RETURN_KEY_CODE, &[], 1)
+}
+
 /// Types `text` as synthesized key events, never touching the clipboard. Line
 /// breaks are Shift-Return so chat boxes insert a newline instead of sending.
 pub fn type_text(text: &str) -> Result<()> {

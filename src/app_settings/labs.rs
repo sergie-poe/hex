@@ -145,6 +145,10 @@ pub struct LabsSettings {
     /// id; a group not here is open while it holds a lab that's on.
     #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub groups: std::collections::BTreeMap<String, bool>,
+    /// Return finishes a locked dictation like the shortcut's second tap (macOS).
+    pub finish_with_return: bool,
+    /// With `labs.finish_with_return`, a dictation finished that way presses Return after its paste (macOS).
+    pub send_after_pasting: bool,
 }
 
 /// The idle times Labs › Unload model when idle offers, in minutes.
@@ -208,6 +212,8 @@ impl Default for LabsSettings {
             meeting_import: false,
             meeting_descriptive_filenames: false,
             expire_meeting_audio: false,
+            finish_with_return: false,
+            send_after_pasting: false,
             groups: std::collections::BTreeMap::new(),
         }
     }

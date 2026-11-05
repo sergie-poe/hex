@@ -123,10 +123,12 @@ pub enum Feature {
     QuitClosesWindow,
     ExpireMeetingAudio,
     CapsLockDictation,
+    FinishWithReturn,
+    SendAfterPasting,
 }
 
 impl Feature {
-    pub const ALL: [Self; 59] = [
+    pub const ALL: [Self; 61] = [
         Self::Meetings,
         Self::VoiceFilter,
         Self::Playground,
@@ -186,6 +188,8 @@ impl Feature {
         Self::QuitClosesWindow,
         Self::ExpireMeetingAudio,
         Self::CapsLockDictation,
+        Self::FinishWithReturn,
+        Self::SendAfterPasting,
     ];
 
     /// The features this OS and build have.
@@ -269,6 +273,8 @@ impl Feature {
             | Self::NotchIndicator
             | Self::QuitClosesWindow
             | Self::GnomeAnnotate
+            | Self::FinishWithReturn
+            | Self::SendAfterPasting
             | Self::CapsLockDictation => Audience::Everyone,
         }
     }
@@ -332,6 +338,7 @@ impl Feature {
             | Self::FailureNotices
             | Self::TypedText => 20261107,
             Self::GnomeAnnotate | Self::TerminalPasteShortcut => 20261108,
+            Self::FinishWithReturn | Self::SendAfterPasting => 20261105,
         }
     }
 
@@ -393,6 +400,8 @@ impl Feature {
             | Self::QuitClosesWindow
             | Self::NotchIndicator
             | Self::Screenshots
+            | Self::FinishWithReturn
+            | Self::SendAfterPasting
             | Self::CapsLockDictation => cfg!(target_os = "macos"),
             Self::KeepOnClipboard | Self::CopyOnly => {
                 cfg!(any(target_os = "macos", target_os = "windows"))
@@ -499,6 +508,8 @@ impl Feature {
             Self::QuitClosesWindow => "quit-closes-window",
             Self::ExpireMeetingAudio => "expire-meeting-audio",
             Self::CapsLockDictation => "caps-lock-dictation",
+            Self::FinishWithReturn => "finish-with-return",
+            Self::SendAfterPasting => "send-after-pasting",
         }
     }
 
@@ -564,6 +575,8 @@ impl Feature {
             Self::QuitClosesWindow => "labs.quit_closes_window",
             Self::ExpireMeetingAudio => "labs.expire_meeting_audio",
             Self::CapsLockDictation => "labs.caps_lock_dictation",
+            Self::FinishWithReturn => "labs.finish_with_return",
+            Self::SendAfterPasting => "labs.send_after_pasting",
         }
     }
 
@@ -633,6 +646,8 @@ impl Feature {
             Self::QuitClosesWindow => settings.labs.quit_closes_window,
             Self::ExpireMeetingAudio => settings.labs.expire_meeting_audio,
             Self::CapsLockDictation => settings.labs.caps_lock_dictation,
+            Self::FinishWithReturn => settings.labs.finish_with_return,
+            Self::SendAfterPasting => settings.labs.send_after_pasting,
         }
     }
 
@@ -700,6 +715,8 @@ impl Feature {
             &mut labs.quit_closes_window,
             &mut labs.expire_meeting_audio,
             &mut labs.caps_lock_dictation,
+            &mut labs.finish_with_return,
+            &mut labs.send_after_pasting,
         ]
     }
 
@@ -767,6 +784,8 @@ impl Feature {
             Self::QuitClosesWindow => settings.labs.quit_closes_window = on,
             Self::ExpireMeetingAudio => settings.labs.expire_meeting_audio = on,
             Self::CapsLockDictation => settings.labs.caps_lock_dictation = on,
+            Self::FinishWithReturn => settings.labs.finish_with_return = on,
+            Self::SendAfterPasting => settings.labs.send_after_pasting = on,
             // Off, no shortcut keeps a key only the feature allows.
             Self::StandaloneSpecialKeys => {
                 settings.labs.standalone_special_keys = on;
@@ -839,6 +858,10 @@ const TYPED_TEXT: u64 = GNOME_ANNOTATE << 1;
 /// The next bit above Typed text's switch: Caps Lock dictation's recording
 /// light blinks slowly instead of staying solid.
 const CAPS_LOCK_SLOW_BLINK: u64 = TYPED_TEXT << 1;
+// Bits 43..52 are upstream's; this fork's switches continue above them
+// (53 is Keep cancelled dictations, 56 App tracking).
+const FINISH_WITH_RETURN: u64 = 1 << 54;
+const SEND_AFTER_PASTING: u64 = 1 << 55;
 
 /// This process's `labs` switches: unknown until settings load or one is
 /// first read.
@@ -1130,6 +1153,21 @@ pub fn expire_meeting_audio() -> bool {
     on(EXPIRE_MEETING_AUDIO) && Feature::ExpireMeetingAudio.on_this_os()
 }
 
+/// Return finishes a locked dictation like the shortcut's second tap
+/// (macOS; read by the recognition loop each time it arms the session tap).
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn finish_with_return() -> bool {
+    on(FINISH_WITH_RETURN) && Feature::FinishWithReturn.on_this_os()
+}
+
+/// A dictation finished with Return presses Return once after its paste
+/// (macOS; needs Finish with Return; read as the finished job is
+/// submitted).
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn send_after_pasting() -> bool {
+    on(SEND_AFTER_PASTING) && Feature::SendAfterPasting.on_this_os() && finish_with_return()
+}
+
 /// How long the speech model may sit unused before the engine unloads it,
 /// while Labs › Unload model when idle is on.
 pub fn unload_idle() -> Option<std::time::Duration> {
@@ -1308,6 +1346,16 @@ fn encode_where(settings: &LabsSettings, reaches: impl Fn(Feature) -> bool) -> u
             GNOME_ANNOTATE,
         ),
         (Feature::Screenshots, settings.screenshots, SCREENSHOTS),
+        (
+            Feature::FinishWithReturn,
+            settings.finish_with_return,
+            FINISH_WITH_RETURN,
+        ),
+        (
+            Feature::SendAfterPasting,
+            settings.send_after_pasting,
+            SEND_AFTER_PASTING,
+        ),
     ]
     .into_iter()
     .filter(|(feature, on, _)| *on && reaches(*feature))
@@ -1719,6 +1767,26 @@ mod tests {
         assert_eq!(state & SCREENSHOTS, 0);
         assert_eq!(state >> MINUTES_SHIFT, 24 * 60);
     }
+    #[test]
+    fn finish_with_return_and_send_after_pasting_are_their_own_bits_and_off_by_default() {
+        let mut labs = LabsSettings::default();
+        let off = encode_where(&labs, |_| true);
+        assert_eq!(off & (FINISH_WITH_RETURN | SEND_AFTER_PASTING), 0);
+        labs.finish_with_return = true;
+        labs.unload_idle_minutes = 24 * 60;
+        let state = encode_where(&labs, |_| true);
+        assert_ne!(state & FINISH_WITH_RETURN, 0);
+        assert_eq!(state & SEND_AFTER_PASTING, 0);
+        assert_eq!(state & ANNOTATE_REPLAY, 0);
+        assert_eq!((state >> MINUTES_SHIFT) & MINUTES_MASK, 24 * 60);
+        labs.finish_with_return = false;
+        labs.send_after_pasting = true;
+        let state = encode_where(&labs, |_| true);
+        assert_eq!(state & FINISH_WITH_RETURN, 0);
+        assert_ne!(state & SEND_AFTER_PASTING, 0);
+        assert_eq!((state >> MINUTES_SHIFT) & MINUTES_MASK, 24 * 60);
+    }
+
     #[test]
     fn gnome_meeting_capsules_is_its_own_bit_and_off_by_default() {
         let mut labs = LabsSettings::default();

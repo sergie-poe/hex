@@ -21,6 +21,8 @@ use tap::*;
 
 const DOUBLE_TAP_WINDOW: Duration = MINIMUM_HOLD_DURATION;
 const ESCAPE_KEY_CODE: u16 = 53;
+const RETURN_KEY_CODE: u16 = 36;
+const KEYPAD_ENTER_KEY_CODE: u16 = 76;
 /// The key code the Globe (Fn) key reports in its own key events.
 const GLOBE_KEY_CODE: u16 = 179;
 
@@ -279,6 +281,7 @@ pub struct InputMonitor {
     takes_escape: Arc<AtomicBool>,
     takes_cancel: Arc<AtomicBool>,
     caps_lock_cancel: Arc<AtomicBool>,
+    takes_finish: Arc<AtomicBool>,
     run_loop: Arc<AtomicPtr<c_void>>,
     worker: Option<JoinHandle<()>>,
     /// Held only so dropping the input monitor stops the HID tracker.
@@ -334,6 +337,8 @@ impl InputMonitor {
         let tap_takes_cancel = takes_cancel.clone();
         let caps_lock_cancel = Arc::new(AtomicBool::new(false));
         let tap_caps_lock_cancel = caps_lock_cancel.clone();
+        let takes_finish = Arc::new(AtomicBool::new(false));
+        let tap_takes_finish = takes_finish.clone();
         let pending = PendingInputEvents::default();
         let tap_pending = pending.clone();
         let worker = thread::spawn(move || {
@@ -343,6 +348,7 @@ impl InputMonitor {
                 TapFlags {
                     takes_escape: tap_takes_escape,
                     takes_cancel: tap_takes_cancel,
+                    takes_finish: tap_takes_finish,
                     caps_lock_cancel: tap_caps_lock_cancel,
                 },
                 tap_pending,
@@ -364,6 +370,7 @@ impl InputMonitor {
             takes_escape,
             takes_cancel,
             caps_lock_cancel,
+            takes_finish,
             run_loop,
             worker: Some(worker),
             _physical_keys: physical_keys,
@@ -384,6 +391,15 @@ impl InputMonitor {
     /// Caps Lock dictation records, even in Hold mode.
     pub fn set_caps_lock_cancel(&self, enabled: bool) {
         self.caps_lock_cancel.store(enabled, Ordering::Release);
+    }
+
+    /// Whether the tap keeps Return (and keypad Enter, with no modifier)
+    /// from the app in front: only while Labs › Finish with Return is armed
+    /// and a dictation is locked. The shortcut machines finish on the same
+    /// arming (`DictationHotkey::set_finish_armed`), so a disarmed Return
+    /// is neither swallowed nor acted on.
+    pub fn set_takes_finish(&self, enabled: bool) {
+        self.takes_finish.store(enabled, Ordering::Release);
     }
 
     pub fn pending_events(&self) -> PendingInputEvents {
@@ -426,6 +442,7 @@ struct EventTapContext {
     takes_escape: Arc<AtomicBool>,
     takes_cancel: Arc<AtomicBool>,
     caps_lock_cancel: Arc<AtomicBool>,
+    takes_finish: Arc<AtomicBool>,
     key_tap: AtomicPtr<c_void>,
     observation_tap: AtomicPtr<c_void>,
     physical_tap: AtomicPtr<c_void>,
@@ -487,6 +504,18 @@ unsafe extern "C" fn physical_event_callback(
         at,
     );
     event
+}
+
+/// Labs › Finish with Return's keys: Return or keypad Enter with no
+/// modifier held. A laptop's Enter (Fn-Return) reports the Fn flag, which
+/// names no modifier here.
+fn is_finish_key(code: u16, flags: u64) -> bool {
+    let flags = if code == KEYPAD_ENTER_KEY_CODE {
+        flags & !crate::app_settings::FUNCTION_KEY_MASK
+    } else {
+        flags
+    };
+    matches!(code, RETURN_KEY_CODE | KEYPAD_ENTER_KEY_CODE) && flags & HOTKEY_MODIFIERS_MASK == 0
 }
 
 /// Whether a HID key press can reveal a chord Hex would otherwise miss.
@@ -717,6 +746,7 @@ unsafe extern "C" fn event_callback(
         context.takes_cancel.load(Ordering::Acquire),
         context.caps_lock_cancel.load(Ordering::Acquire),
     );
+    suppression.takes_finish = context.takes_finish.load(Ordering::Acquire);
     let suppress = suppression.process_all(
         input,
         hotkeys,
@@ -998,6 +1028,10 @@ fn send_input(context: &EventTapContext, event: InputEvent, capture_at: CaptureI
 struct ShortcutSuppression {
     // Repeats and releases keep the original press's suppression decision.
     key_presses: HashMap<u16, bool>,
+    /// Labs › Finish with Return is armed: the tap sets it from
+    /// `InputMonitor::set_takes_finish` before each decision, and a fresh
+    /// Return press made while it is set is kept from the app.
+    takes_finish: bool,
 }
 
 /// The tap's cancel binding: only while the listener arms it. A Caps Lock
@@ -1041,8 +1075,9 @@ impl ShortcutSuppression {
     }
 
     /// Whether the tap keeps `input` from the app in front: Hex's shortcuts,
-    /// Escape while Hex takes it, and `hotkeys.cancel`, which the caller
-    /// leaves set only while a toggled recording runs.
+    /// Escape while Hex takes it, `hotkeys.cancel`, which the caller leaves
+    /// set only while a toggled recording runs, and Return while
+    /// `takes_finish` is set.
     fn process_all(
         &mut self,
         input: InputEvent,
@@ -1059,6 +1094,7 @@ impl ShortcutSuppression {
             } => *self.key_presses.entry(code).or_insert_with(|| {
                 delivered
                     && ((code == ESCAPE_KEY_CODE && takes_escape)
+                        || (self.takes_finish && is_finish_key(code, flags))
                         || bindings
                             .iter()
                             .flatten()

@@ -1554,6 +1554,54 @@ every app for as long as Hex runs, so Wayland binds nothing for it. Checks:
 and `cancel_parses_and_takes_no_flags` in [control.rs](../../src/control.rs).
 The X11 grab and the hooks' suppression have no automated end-to-end check.
 
+### Finish With Return
+
+```ts
+Labs > Finish with Return (off, macOS)               // dictate.finish-with-return
+  Dictation LOCKED (Tap after release, double-tap lock, Double-tap,
+                    `hex dictation start`) -> Return, or keypad Enter, with no modifier
+    -> Finishes exactly like the locked second tap: same moment, 200 ms tail,
+       Paste (the raw shortcut's capture stays raw), tones, HUD
+    -> The key is kept from the app (press, repeats, release)
+    -> Cancel bound to Return -> Cancel wins
+  Tap press still held / Hold held / idle -> Return reaches the app; today's chord rules
+  Shift, ⌘, ⌥, or Control with Return -> the app's
+  Keypad Enter on a laptop (Fn-Return) -> counts as Enter
+  Local-API (programmatic) dictation -> Return is the app's
+  Recording a shortcut in Settings -> every key passes, as before
+Labs > Send after pasting (off, with Finish with Return)  // dictate.send-after-pasting
+  Dictation finished by Return -> Paste lands
+    ├── Same app in front as when the dictation started -> Return pressed once (the chat sends)
+    └── Another app in front, Copy dictation only, empty or cancelled -> nothing; the log says why
+  Next dictation -> starts a new message (not joined onto the sent one)
+```
+
+Return is Hex's only while the listener arms it: every pass of the loop it sets
+one decision for the shortcut machines (they finish on Return only when armed)
+and the event tap (it swallows Return only when armed *and* a dictation is
+locked), so disarming it stops both the swallow and the finish
+(`recognition/finish.rs`). The app a capture started in
+(`Hotkeys::start_app`, its process ID) is noted when a hotkey or
+`hex dictation start` capture begins while the lab is on, and rides the job
+(`JobControl::send_to`) to the output worker, which presses Return
+(`keyboard::post_return`, marked synthetic so Hex's taps ignore it) after
+the paste and bumps the input activity so the next paste is not joined onto it.
+Return's press while a Tap press is still held stays chord evidence.
+Source: [suppression/hotkey.rs](../../src/suppression/hotkey.rs),
+[recognition/finish.rs](../../src/recognition/finish.rs),
+[parakeet/send.rs](../../src/parakeet/send.rs).
+Checks: `return_finishes_only_a_locked_recording`,
+`return_finishes_a_double_tap_lock_a_control_lock_and_not_a_held_hold`,
+`return_with_a_modifier_is_the_apps_and_keypad_enter_with_fn_finishes`,
+`a_cancel_or_dictation_shortcut_on_return_beats_finish_with_return`, and
+`return_is_suppressed_only_while_armed` in
+[suppression/tests.rs](../../src/suppression/tests.rs);
+`return_follows_a_paste_into_the_app_the_dictation_started_in` and
+`return_is_skipped_when_nothing_was_pasted_into_that_app` in
+[parakeet/send.rs](../../src/parakeet/send.rs) (macOS only, not compiled on
+Linux). Not verified: a physical keyboard, a real chat app, or the Return
+pressed after a paste that is slow to land in the target.
+
 ### Feedback
 
 ```ts

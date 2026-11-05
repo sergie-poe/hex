@@ -533,6 +533,19 @@ fn rows(ui: &Ui) -> Vec<Row> {
                 tr("Tap or hold"),
                 tr("In Toggle mode, hold the shortcut to dictate until you let go; a short tap still starts and stops"),
             ));
+            // macOS's session tap swallows Return while a dictation is locked.
+            rows.push(row(
+                Feature::FinishWithReturn,
+                Some(&KEYBOARD),
+                tr("Finish with Return"),
+                tr("Return finishes a tapped or locked dictation and pastes it, like the shortcut's second tap"),
+            ));
+            rows.push(row(
+                Feature::SendAfterPasting,
+                Some(&KEYBOARD),
+                tr("Send after pasting"),
+                tr("With Finish with Return, Hex presses Return after pasting, so a chat box sends the message"),
+            ));
             // macOS's menu-bar menu lists them.
             rows.push(row(
                 Feature::RecentDictations,
@@ -841,6 +854,8 @@ fn row_key(lab: Lab) -> &'static str {
         Feature::MeetingImport => "lab-meeting-import",
         Feature::MeetingDescriptiveFilenames => "lab-meeting-descriptive-filenames",
         Feature::ExpireMeetingAudio => "lab-expire-meeting-audio",
+        Feature::FinishWithReturn => "lab-finish-with-return",
+        Feature::SendAfterPasting => "lab-send-after-pasting",
     }
 }
 

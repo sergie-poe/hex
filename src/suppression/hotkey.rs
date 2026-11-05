@@ -14,6 +14,10 @@ pub enum HotkeyAction {
     Cancel,
     /// Toggle's cancel shortcut discarded the recording.
     CancelShortcut,
+    /// Labs › Finish with Return: Return finished a locked recording, as
+    /// the shortcut's own press would (`Finish`), but this one may be
+    /// followed by Labs › Send after pasting.
+    FinishShortcut,
     PasteLast,
     PasteMeeting,
 }
@@ -130,6 +134,10 @@ pub struct DictationHotkey {
     binding: RuntimeHotkey,
     /// Toggle's cancel shortcut; `None` in Hold mode.
     cancel: Option<RuntimeHotkey>,
+    /// Labs › Finish with Return is armed (the listener sets it with the
+    /// tap's, `InputMonitor::set_takes_finish`): a fresh Return finishes a
+    /// locked recording. Unarmed, Return does nothing here.
+    finish_armed: bool,
     ignore_before: Option<CaptureInstant>,
     stale_keys_neutral_since: Option<CaptureInstant>,
     recovery_ignore_through: Option<CaptureInstant>,
@@ -182,6 +190,7 @@ impl DictationHotkey {
             tap_or_hold: TAP_OR_HOLD,
             binding,
             cancel: None,
+            finish_armed: false,
             ignore_before: None,
             stale_keys_neutral_since: None,
             recovery_ignore_through: None,
@@ -208,7 +217,6 @@ impl DictationHotkey {
 
     /// Recording hands-free: locked by a double tap, a Toggle release, or
     /// `hex dictation start`.
-    #[cfg(test)]
     pub fn is_locked(&self) -> bool {
         matches!(self.state, State::Locked)
     }
@@ -247,6 +255,12 @@ impl DictationHotkey {
     /// Toggle's cancel shortcut, or `None` for no cancel.
     pub fn set_cancel(&mut self, cancel: Option<RuntimeHotkey>) {
         self.cancel = cancel;
+    }
+
+    /// Arms or disarms Labs › Finish with Return for this machine. Disarmed,
+    /// Return never finishes it, whatever the state.
+    pub fn set_finish_armed(&mut self, armed: bool) {
+        self.finish_armed = armed;
     }
 
     pub fn set_binding(&mut self, binding: RuntimeHotkey) {
@@ -666,6 +680,26 @@ impl DictationHotkey {
         {
             self.state = State::Dirty;
             return Some(HotkeyAction::CancelShortcut);
+        }
+
+        // Labs › Finish with Return: Return finishes a locked recording as
+        // the shortcut's second tap would. Only while armed (the tap kept
+        // the key from the app), after the cancel shortcut so a cancel bound
+        // to Return wins, and not for a dictation shortcut on Return itself,
+        // which finishes through `trigger_pressed`.
+        if fresh_key_down
+            && self.finish_armed
+            && matches!(self.state, State::Locked)
+            && let InputEvent::Key {
+                code,
+                down: true,
+                flags,
+            } = event
+            && is_finish_key(code, flags)
+            && !self.binding.matches_key_press(code, flags)
+        {
+            self.state = State::Dirty;
+            return Some(HotkeyAction::FinishShortcut);
         }
 
         let ignored_because = binding_press

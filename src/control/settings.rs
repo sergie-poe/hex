@@ -509,6 +509,16 @@ const KEYS: &[Key] = &[
         "Labs: keep a rolling 15-second screen buffer so hex capture replay or capture.replay_hotkey saves what just happened; macOS shows the screen-recording dot the whole time it's on (macOS 27+)",
     ),
     key(
+        "labs.finish_with_return",
+        Kind::Bool,
+        "Labs: Return (no modifiers; keypad Enter too) finishes a tapped or locked dictation and pastes it, like the shortcut's second tap; Return is taken from the app in front only while a dictation is locked (macOS)",
+    ),
+    key(
+        "labs.send_after_pasting",
+        Kind::Bool,
+        "Labs: with labs.finish_with_return, press Return once after pasting a dictation finished with Return, if the app that was in front when it started still is (macOS)",
+    ),
+    key(
         "labs.gnome_clipboard_restore",
         Kind::Bool,
         "Labs: on Wayland desktops without data-control, such as GNOME, a paste restores the previous clipboard through XWayland while it is already running (Linux)",

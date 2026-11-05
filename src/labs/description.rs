@@ -162,6 +162,12 @@ impl Feature {
             Self::CapsLockDictation => {
                 "Press Caps Lock to start and stop dictation; its light shows when Hex records and transcribes"
             }
+            Self::FinishWithReturn => {
+                "Return finishes a tapped or locked dictation and pastes it, like the shortcut's second tap"
+            }
+            Self::SendAfterPasting => {
+                "With Finish with Return, Hex presses Return after pasting, so a chat box sends the message"
+            }
         }
     }
 }

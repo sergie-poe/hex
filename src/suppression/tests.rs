@@ -20,6 +20,7 @@ fn test_tap_context(takes_escape: bool) -> (EventTapContext, mpsc::Receiver<Obse
         takes_escape: Arc::new(AtomicBool::new(takes_escape)),
         takes_cancel: Arc::new(AtomicBool::new(false)),
         caps_lock_cancel: Arc::new(AtomicBool::new(false)),
+        takes_finish: Arc::new(AtomicBool::new(false)),
         key_tap: AtomicPtr::new(ptr::null_mut()),
         observation_tap: AtomicPtr::new(ptr::null_mut()),
         physical_tap: AtomicPtr::new(ptr::null_mut()),
@@ -2561,6 +2562,280 @@ fn the_cancel_key_is_suppressed_only_while_armed() {
     };
     assert!(suppression.process_all(escape(true), armed, true, false));
     assert!(suppression.process_all(escape(false), armed, true, false));
+}
+
+const RETURN: u16 = RETURN_KEY_CODE;
+
+fn key(code: u16, down: bool, flags: u64) -> InputEvent {
+    InputEvent::Key { code, down, flags }
+}
+
+/// Labs › Finish with Return: armed, Return finishes a locked recording like
+/// the shortcut's second tap, however it was locked. A Toggle recording
+/// still held, an idle machine, and an unarmed machine leave Return alone.
+#[test]
+fn return_finishes_only_a_locked_recording() {
+    let now = capture_time();
+    let ms = |ms| now + Duration::from_millis(ms);
+    let toggled = |armed| {
+        let mut hotkey = DictationHotkey::with_binding(false, now, true, shift_space_binding());
+        hotkey.set_toggle(true);
+        hotkey.set_finish_armed(armed);
+        hotkey
+    };
+
+    // Idle: Return is the app's.
+    let mut hotkey = toggled(true);
+    assert_eq!(hotkey.process(key(RETURN, true, NO_FLAGS), now), None);
+    assert_eq!(hotkey.process(key(RETURN, false, NO_FLAGS), ms(20)), None);
+
+    // Held (Toggle's press not yet released): not locked, so not a finish.
+    assert_eq!(
+        hotkey.process(shift_space_event(true), ms(100)),
+        Some(HotkeyAction::Start)
+    );
+    assert_eq!(
+        hotkey.process(key(RETURN, true, SHIFT_KEY_MASK), ms(500)),
+        None
+    );
+    assert_eq!(
+        hotkey.process(key(RETURN, false, SHIFT_KEY_MASK), ms(520)),
+        None
+    );
+
+    // Locked by the release: Return finishes it once, and the next press
+    // starts a new one after Return's release.
+    assert_eq!(hotkey.process(shift_space_event(false), ms(560)), None);
+    assert!(hotkey.is_locked());
+    assert_eq!(
+        hotkey.process(key(RETURN, true, NO_FLAGS), ms(1_000)),
+        Some(HotkeyAction::FinishShortcut)
+    );
+    assert!(!hotkey.is_recording());
+    // A repeat and the release do nothing.
+    assert_eq!(hotkey.process(key(RETURN, true, NO_FLAGS), ms(1_030)), None);
+    assert_eq!(
+        hotkey.process(key(RETURN, false, NO_FLAGS), ms(1_060)),
+        None
+    );
+    assert_eq!(
+        hotkey.process(shift_space_event(true), ms(2_000)),
+        Some(HotkeyAction::Start)
+    );
+
+    // Unarmed (the lab is off, or a rule disarmed it): nothing happens.
+    let mut hotkey = toggled(false);
+    hotkey.process(shift_space_event(true), now);
+    hotkey.process(shift_space_event(false), ms(60));
+    assert!(hotkey.is_locked());
+    assert_eq!(hotkey.process(key(RETURN, true, NO_FLAGS), ms(1_000)), None);
+    assert!(hotkey.is_locked());
+    // Armed later, the same lock answers.
+    hotkey.process(key(RETURN, false, NO_FLAGS), ms(1_040));
+    hotkey.set_finish_armed(true);
+    assert_eq!(
+        hotkey.process(key(RETURN, true, NO_FLAGS), ms(2_000)),
+        Some(HotkeyAction::FinishShortcut)
+    );
+}
+
+/// A hold-mode recording is held, not locked, until its double-tap lock; the
+/// lock, `hex dictation start`, and a double-tap-only lock all arm Return.
+#[test]
+fn return_finishes_a_double_tap_lock_a_control_lock_and_not_a_held_hold() {
+    let now = capture_time();
+    let ms = |ms| now + Duration::from_millis(ms);
+    let armed = |binding| {
+        let mut hotkey = DictationHotkey::with_binding(false, now, true, binding);
+        hotkey.set_finish_armed(true);
+        hotkey
+    };
+    let option = |flags| InputEvent::Flags(flags);
+
+    // Held: Option down, and Return pressed without a modifier is no finish.
+    let mut hotkey = armed(option_binding());
+    assert_eq!(
+        hotkey.process(option(OPTION_KEY_MASK), now),
+        Some(HotkeyAction::Start)
+    );
+    assert_ne!(
+        hotkey.process(key(RETURN, true, NO_FLAGS), ms(500)),
+        Some(HotkeyAction::FinishShortcut)
+    );
+
+    // Double-tap lock.
+    let mut hotkey = armed(option_binding());
+    hotkey.process(option(OPTION_KEY_MASK), now);
+    hotkey.process(option(NO_FLAGS), ms(80));
+    hotkey.process(option(OPTION_KEY_MASK), ms(180));
+    hotkey.process(option(NO_FLAGS), ms(260));
+    assert!(hotkey.is_locked());
+    assert_eq!(
+        hotkey.process(key(RETURN, true, NO_FLAGS), ms(900)),
+        Some(HotkeyAction::FinishShortcut)
+    );
+
+    // `hex dictation start`.
+    let mut hotkey = armed(option_binding());
+    assert!(hotkey.lock());
+    assert_eq!(
+        hotkey.process(key(RETURN, true, NO_FLAGS), ms(900)),
+        Some(HotkeyAction::FinishShortcut)
+    );
+
+    // Double-tap only.
+    let mut hotkey = armed(shift_space_binding());
+    hotkey.set_double_tap_only(true);
+    hotkey.process(shift_space_event(true), now);
+    hotkey.process(shift_space_event(false), ms(50));
+    hotkey.process(shift_space_event(true), ms(150));
+    assert_eq!(
+        hotkey.process(shift_space_event(false), ms(200)),
+        Some(HotkeyAction::Start)
+    );
+    assert!(hotkey.is_locked());
+    assert_eq!(
+        hotkey.process(key(RETURN, true, NO_FLAGS), ms(900)),
+        Some(HotkeyAction::FinishShortcut)
+    );
+}
+
+/// Only Return and keypad Enter with no modifier finish; a laptop's Enter
+/// carries Fn.
+#[test]
+fn return_with_a_modifier_is_the_apps_and_keypad_enter_with_fn_finishes() {
+    let now = capture_time();
+    let locked = || {
+        let mut hotkey = DictationHotkey::with_binding(false, now, true, option_binding());
+        hotkey.set_finish_armed(true);
+        assert!(hotkey.lock());
+        hotkey
+    };
+    for flags in [
+        SHIFT_KEY_MASK,
+        COMMAND_KEY_MASK,
+        OPTION_KEY_MASK,
+        CONTROL_KEY_MASK,
+        FUNCTION_KEY_MASK,
+    ] {
+        let mut hotkey = locked();
+        assert_eq!(
+            hotkey.process(key(RETURN, true, flags), now),
+            None,
+            "{flags:#x}"
+        );
+        assert!(hotkey.is_locked());
+    }
+    // Keypad Enter: bare, with the numeric-pad flag, and as a laptop's
+    // Fn-Return, but not with a real modifier.
+    const NUMERIC_PAD: u64 = 1 << 21;
+    for flags in [NO_FLAGS, NUMERIC_PAD, FUNCTION_KEY_MASK | NUMERIC_PAD] {
+        let mut hotkey = locked();
+        assert_eq!(
+            hotkey.process(key(KEYPAD_ENTER_KEY_CODE, true, flags), now),
+            Some(HotkeyAction::FinishShortcut),
+            "{flags:#x}"
+        );
+    }
+    let mut hotkey = locked();
+    assert_eq!(
+        hotkey.process(
+            key(
+                KEYPAD_ENTER_KEY_CODE,
+                true,
+                FUNCTION_KEY_MASK | SHIFT_KEY_MASK
+            ),
+            now
+        ),
+        None
+    );
+    // Return still reports Fn as a real modifier.
+    assert!(!is_finish_key(RETURN, FUNCTION_KEY_MASK));
+    assert!(is_finish_key(RETURN, 1 << 16));
+}
+
+/// A cancel shortcut bound to Return wins; a dictation shortcut on Return
+/// finishes through its own press.
+#[test]
+fn a_cancel_or_dictation_shortcut_on_return_beats_finish_with_return() {
+    let now = capture_time();
+    let ms = |ms| now + Duration::from_millis(ms);
+    let return_binding = RuntimeHotkey {
+        modifiers: Default::default(),
+        key_code: Some(RETURN),
+    };
+    let mut hotkey = DictationHotkey::with_binding(false, now, true, shift_space_binding());
+    hotkey.set_toggle(true);
+    hotkey.set_finish_armed(true);
+    hotkey.set_cancel(Some(return_binding));
+    hotkey.process(shift_space_event(true), now);
+    hotkey.process(shift_space_event(false), ms(60));
+    assert!(hotkey.is_locked());
+    assert_eq!(
+        hotkey.process(key(RETURN, true, NO_FLAGS), ms(900)),
+        Some(HotkeyAction::CancelShortcut)
+    );
+
+    let mut hotkey = DictationHotkey::with_binding(false, now, true, return_binding);
+    hotkey.set_finish_armed(true);
+    assert!(hotkey.lock());
+    assert_eq!(
+        hotkey.process(key(RETURN, true, NO_FLAGS), ms(900)),
+        Some(HotkeyAction::Finish)
+    );
+}
+
+/// The tap keeps Return from the app only while the listener arms it, and a
+/// press's decision outlives the arming for its repeats and release.
+#[test]
+fn return_is_suppressed_only_while_armed() {
+    let mut suppression = ShortcutSuppression::default();
+    let hotkeys = RuntimeHotkeys::default();
+    let bare = |down| key(RETURN, down, NO_FLAGS);
+
+    // Disarmed: the app's.
+    assert!(!suppression.process_all(bare(true), hotkeys, true, false));
+    assert!(!suppression.process_all(bare(false), hotkeys, true, false));
+
+    // Armed: swallowed, with its repeats and its release, even if disarmed
+    // meanwhile.
+    suppression.takes_finish = true;
+    assert!(suppression.process_all(bare(true), hotkeys, true, false));
+    suppression.takes_finish = false;
+    assert!(suppression.process_all(bare(true), hotkeys, true, false));
+    assert!(suppression.process_all(bare(false), hotkeys, true, false));
+    // A press made unarmed stays the app's when armed mid-press.
+    assert!(!suppression.process_all(bare(true), hotkeys, true, false));
+    suppression.takes_finish = true;
+    assert!(!suppression.process_all(bare(true), hotkeys, true, false));
+    assert!(!suppression.process_all(bare(false), hotkeys, true, false));
+
+    // Armed, modified Return and other keys pass; keypad Enter with Fn is taken.
+    for flags in [
+        SHIFT_KEY_MASK,
+        COMMAND_KEY_MASK,
+        OPTION_KEY_MASK,
+        CONTROL_KEY_MASK,
+    ] {
+        assert!(!suppression.process_all(key(RETURN, true, flags), hotkeys, true, false));
+        suppression.process_all(key(RETURN, false, flags), hotkeys, true, false);
+    }
+    assert!(!suppression.process_all(key(0, true, NO_FLAGS), hotkeys, true, false));
+    suppression.process_all(key(0, false, NO_FLAGS), hotkeys, true, false);
+    assert!(suppression.process_all(
+        key(KEYPAD_ENTER_KEY_CODE, true, FUNCTION_KEY_MASK),
+        hotkeys,
+        true,
+        false
+    ));
+    // An event the listener never received is not taken.
+    suppression.process_all(
+        key(KEYPAD_ENTER_KEY_CODE, false, FUNCTION_KEY_MASK),
+        hotkeys,
+        true,
+        false,
+    );
+    assert!(!suppression.process_all(bare(true), hotkeys, false, false));
 }
 
 #[test]

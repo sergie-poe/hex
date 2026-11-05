@@ -24,6 +24,8 @@ use crate::transcription::models::{
     TranscriptionModelId, TranscriptionSelection, model_path, validate,
 };
 
+mod send;
+
 pub struct Parakeet {
     session: OfflineGgufSession,
     options: RunOptions,
@@ -177,6 +179,10 @@ struct JobControl {
     /// A printing stop's reply; dropping the job unanswered tells it the
     /// dictation was cancelled or failed.
     print: Mutex<Option<crate::control::PrintReply>>,
+    /// Labs › Send after pasting: the app (process ID) the dictation started
+    /// in, set only for one finished with Return. Once its paste lands and
+    /// that app is still in front, Return is pressed.
+    send_to: Option<i32>,
 }
 
 impl JobControl {
@@ -363,7 +369,19 @@ impl DictationWorker {
         target: TranscriptionTarget,
         context: ContextSnapshot,
     ) -> Result<DictationJobId, &'static str> {
-        self.submit(clip, target, context, None)
+        self.submit(clip, target, context, None, None)
+    }
+
+    /// Like `transcribe`, then presses Return once after the paste if
+    /// `send_to` (the app the dictation started in) is still in front.
+    pub fn transcribe_then_send(
+        &self,
+        clip: DictationClip,
+        target: TranscriptionTarget,
+        context: ContextSnapshot,
+        send_to: Option<i32>,
+    ) -> Result<DictationJobId, &'static str> {
+        self.submit(clip, target, context, None, send_to)
     }
 
     /// Like a paste, but the transcript (processed unless `raw`) goes to
@@ -380,7 +398,7 @@ impl DictationWorker {
         } else {
             TranscriptionTarget::Print
         };
-        self.submit(clip, target, context, Some(print))
+        self.submit(clip, target, context, Some(print), None)
     }
 
     fn submit(
@@ -389,6 +407,7 @@ impl DictationWorker {
         target: TranscriptionTarget,
         context: ContextSnapshot,
         print: Option<crate::control::PrintReply>,
+        send_to: Option<i32>,
     ) -> Result<DictationJobId, &'static str> {
         let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
         let job_id = DictationJobId(state.next_output_sequence()?);
@@ -397,6 +416,7 @@ impl DictationWorker {
         };
         let control = Arc::new(JobControl {
             print: Mutex::new(print),
+            send_to,
             ..JobControl::default()
         });
         let (_, selection) = crate::app_settings::transcription_selection();
@@ -546,6 +566,7 @@ fn run_output_worker(
     state: &Mutex<WorkerState>,
     events: &mpsc::Sender<WorkerEvent>,
 ) {
+    let sent = activity.clone();
     let mut paster = Paster::new(activity);
     let mut last_transcript = None;
     let mut ordered = OrderedOutputs::default();
@@ -560,6 +581,7 @@ fn run_output_worker(
                 &mut |text, mode, commit| paster.paste(text, mode, commit),
                 &mut last_transcript,
                 history.as_ref(),
+                &sent,
             );
             let mut state = state.lock().unwrap_or_else(|error| error.into_inner());
             match &event {
@@ -980,6 +1002,7 @@ fn finish_output(
     paste: &mut impl FnMut(&str, PasteMode, &dyn Fn() -> bool) -> Result<()>,
     last_transcript: &mut Option<String>,
     history: Option<&History>,
+    activity: &InputActivity,
 ) -> WorkerEvent {
     match job {
         OutputJob::PreparePaste => unreachable!("paste preparation bypasses ordered output"),
@@ -1011,7 +1034,17 @@ fn finish_output(
                             } else {
                                 PasteMode::Continue
                             };
-                            paste(&completed.text, mode, &commit)
+                            let pasted = paste(&completed.text, mode, &commit);
+                            if pasted.is_ok() {
+                                send::after_paste(
+                                    control.send_to,
+                                    mode,
+                                    &completed.text,
+                                    control.is_cancelled(),
+                                    activity,
+                                );
+                            }
+                            pasted
                         }
                         TranscriptionTarget::Service
                         | TranscriptionTarget::Print

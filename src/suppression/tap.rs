@@ -176,6 +176,7 @@ pub(super) fn observation_mask() -> u64 {
 pub(super) struct TapFlags {
     pub(super) takes_escape: Arc<AtomicBool>,
     pub(super) takes_cancel: Arc<AtomicBool>,
+    pub(super) takes_finish: Arc<AtomicBool>,
     pub(super) caps_lock_cancel: Arc<AtomicBool>,
 }
 
@@ -192,6 +193,7 @@ pub(super) fn run_event_tap(
         activity,
         takes_escape: flags.takes_escape,
         takes_cancel: flags.takes_cancel,
+        takes_finish: flags.takes_finish,
         caps_lock_cancel: flags.caps_lock_cancel,
         key_tap: AtomicPtr::new(ptr::null_mut()),
         observation_tap: AtomicPtr::new(ptr::null_mut()),

@@ -25,6 +25,8 @@ use crate::parakeet::{
 };
 use crate::suppression::{DictationHotkey, DiscardCause, HotkeyAction, InputEvent, InputMonitor};
 
+mod finish;
+
 enum FinishResult {
     Discarded,
     Silent,
@@ -185,6 +187,9 @@ struct Hotkeys {
     /// The recording (or the last) skips processing: the raw shortcut or
     /// `hex dictation start --raw` started it.
     raw_capture: bool,
+    /// The app (process ID) the recording started in, noted while Labs ›
+    /// Finish with Return is on (`finish`); meaningful only while recording.
+    start_app: Option<i32>,
 }
 
 impl Hotkeys {
@@ -320,7 +325,7 @@ impl Hotkeys {
         }
         let action = self.caps_lock.caps_lock_toggle()?;
         if action == HotkeyAction::Start {
-            self.raw_capture = false;
+            self.begin_capture(false);
         }
         Some(action)
     }
@@ -429,6 +434,7 @@ pub fn listen(
             crate::app_settings::RuntimeHotkey::default(),
         ),
         raw_capture: false,
+        start_app: None,
     };
     hotkeys.configure(CaptureInstant::now());
     let hud = indicator;
@@ -526,6 +532,7 @@ pub fn listen(
             handle_hotkey_action(
                 HotkeyAction::Cancel,
                 false,
+                None,
                 input.captured_through(),
                 &input,
                 &dictation_worker,
@@ -940,6 +947,7 @@ pub fn listen(
             handle_hotkey_action(
                 HotkeyAction::Cancel,
                 false,
+                None,
                 input.captured_through(),
                 &input,
                 &dictation_worker,
@@ -965,6 +973,7 @@ pub fn listen(
             handle_hotkey_action(
                 HotkeyAction::Cancel,
                 false,
+                None,
                 input.captured_through(),
                 &input,
                 &dictation_worker,
@@ -999,6 +1008,7 @@ pub fn listen(
             let accepted = handle_hotkey_action(
                 action,
                 hotkeys.raw_capture,
+                None,
                 at,
                 &input,
                 &dictation_worker,
@@ -1078,11 +1088,13 @@ pub fn listen(
             }
             for (shortcut, action) in hotkeys.process(input_event, capture_at) {
                 if action == HotkeyAction::Start {
-                    hotkeys.raw_capture = shortcut == Shortcut::Raw;
+                    hotkeys.begin_capture(shortcut == Shortcut::Raw);
                 }
+                let send_to = hotkeys.send_to(action);
                 let accepted = handle_hotkey_action(
                     action,
                     hotkeys.raw_capture,
+                    send_to,
                     capture_at,
                     &input,
                     &dictation_worker,
@@ -1196,6 +1208,8 @@ pub fn listen(
         // keeps its Toggle-mode cancel meaning while it records.
         input_monitor
             .set_caps_lock_cancel(programmatic.is_none() && hotkeys.caps_lock.is_recording());
+        // Labs › Finish with Return: Return is Hex's only while a dictation is locked.
+        hotkeys.arm_finish(&input_monitor, programmatic.is_some());
         if received_worker_event {
             emit_engine_state(
                 &mut events,
@@ -1428,6 +1442,7 @@ fn cancel_programmatic_capture(
 fn handle_hotkey_action(
     action: HotkeyAction,
     raw: bool,
+    send_to: Option<i32>,
     action_at: CaptureInstant,
     dictation: &DictationAudio,
     worker: &DictationWorker,
@@ -1454,7 +1469,9 @@ fn handle_hotkey_action(
             indicator.send(DictationIndicatorEvent::Started);
             emit_state(events, true, device)
         }
-        HotkeyAction::Finish => finish_hotkey_dictation(
+        // Return finishes a locked dictation exactly as the shortcut's own
+        // press does; only Send after pasting tells them apart.
+        HotkeyAction::Finish | HotkeyAction::FinishShortcut => finish_hotkey_dictation(
             action_at,
             dictation,
             worker,
@@ -1465,6 +1482,7 @@ fn handle_hotkey_action(
             release_while_idle,
             None,
             raw,
+            send_to,
         )
         .map(drop),
         HotkeyAction::Discard(_) | HotkeyAction::Cancel | HotkeyAction::CancelShortcut => {
@@ -1516,6 +1534,7 @@ fn finish_hotkey_dictation(
     release_while_idle: bool,
     print: Option<PrintReply>,
     raw: bool,
+    send_to: Option<i32>,
 ) -> Result<FinishResult> {
     if dictation.become_intentional(action_at)? && release_while_idle {
         feedback::play(Tone::DictationStart);
@@ -1532,6 +1551,7 @@ fn finish_hotkey_dictation(
                 TranscriptionTarget::Paste
             },
             context,
+            send_to,
             device,
             events,
             indicator,
@@ -1644,6 +1664,7 @@ fn control_dictation(
             handle_hotkey_action(
                 HotkeyAction::CancelShortcut,
                 false,
+                None,
                 input.captured_through(),
                 input,
                 worker,
@@ -1669,10 +1690,11 @@ fn control_dictation(
                     "the dictation shortcut is held; release it and try again",
                 ));
             }
-            hotkeys.raw_capture = raw;
+            hotkeys.begin_capture(raw);
             let accepted = handle_hotkey_action(
                 HotkeyAction::Start,
                 raw,
+                None,
                 capture_boundary(input, release_while_idle),
                 input,
                 worker,
@@ -1710,6 +1732,7 @@ fn control_dictation(
                 release_while_idle,
                 print,
                 hotkeys.raw_capture,
+                None,
             )?;
             match finished {
                 FinishResult::Discarded | FinishResult::Silent if printing => {
@@ -1856,6 +1879,7 @@ fn finish_dictation(
     worker: &DictationWorker,
     target: TranscriptionTarget,
     context: &ContextSnapshot,
+    send_to: Option<i32>,
     device: &str,
     events: &mut EventLog,
     indicator: DictationSink<'_>,
@@ -1864,7 +1888,7 @@ fn finish_dictation(
         capture,
         ended_at,
         tail,
-        |clip| worker.transcribe(clip, target, context.clone()),
+        |clip| worker.transcribe_then_send(clip, target, context.clone(), send_to),
         device,
         events,
         indicator,
@@ -2051,6 +2075,7 @@ mod tests {
             raw: None,
             caps_lock: DictationHotkey::new(base, false, RuntimeHotkey::default()),
             raw_capture: false,
+            start_app: None,
         };
         let mut press = |flags: u64, ms: u64| hotkeys.process(InputEvent::Flags(flags), at(ms));
         const START: HotkeyAction = HotkeyAction::Start;
@@ -2098,6 +2123,7 @@ mod tests {
             raw: None,
             caps_lock,
             raw_capture: false,
+            start_app: None,
         }
     }
 
