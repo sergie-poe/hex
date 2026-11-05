@@ -1202,14 +1202,15 @@ pub fn listen(
         let capture_escape = false;
         input_monitor.set_takes_escape(claims_escape(programmatic.is_some(), capture_escape));
         // Toggle's cancel key is Hex's only while one of its shortcuts'
-        // recordings runs; the listener ignores keys during a programmatic one.
-        input_monitor.set_takes_cancel(programmatic.is_none() && hotkeys.any_recording());
+        // recordings runs, and Labs › Finish with Return's Return only while
+        // a dictation is locked; the listener ignores keys during a
+        // programmatic one. Labs › App tracking also needs the app in front.
+        let in_start_app = hotkeys.arm_keys(&input_monitor, programmatic.is_some());
         // A Caps Lock capture is hands-free in Hold mode too, so Escape
         // keeps its Toggle-mode cancel meaning while it records.
-        input_monitor
-            .set_caps_lock_cancel(programmatic.is_none() && hotkeys.caps_lock.is_recording());
-        // Labs › Finish with Return: Return is Hex's only while a dictation is locked.
-        hotkeys.arm_finish(&input_monitor, programmatic.is_some());
+        input_monitor.set_caps_lock_cancel(
+            programmatic.is_none() && hotkeys.caps_lock.is_recording() && in_start_app,
+        );
         if received_worker_event {
             emit_engine_state(
                 &mut events,

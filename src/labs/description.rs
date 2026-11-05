@@ -168,6 +168,9 @@ impl Feature {
             Self::SendAfterPasting => {
                 "Hex presses Return after pasting, so a chat box sends the message, if you're still in the app where you started"
             }
+            Self::AppTracking => {
+                "Escape and Return act on a dictation only in the app where you started it"
+            }
         }
     }
 }

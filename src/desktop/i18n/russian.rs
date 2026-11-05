@@ -123,6 +123,8 @@ const TRANSLATIONS: &[(&str, &str)] = &[
     ("Return finishes a tapped or locked dictation and pastes it, like the shortcut's second tap", "Return завершает диктовку, начатую нажатием или заблокированную, и вставляет её, как второе нажатие сочетания клавиш"),
     ("Send after pasting", "Отправлять после вставки"),
     ("Hex presses Return after pasting, so a chat box sends the message, if you're still in the app where you started", "Hex нажимает Return после вставки, чтобы чат отправил сообщение, если вы всё ещё в приложении, где начали"),
+    ("App tracking", "Отслеживание приложения"),
+    ("Escape and Return act on a dictation only in the app where you started it", "Escape и Return действуют на диктовку только в приложении, где вы её начали"),
     ("Copy recent dictations", "Копирование последних диктовок"),
     ("Copy one of your last five dictations from the menu bar, under Paste Last Dictation", "Копируйте одну из пяти последних диктовок в строке меню, в разделе «Вставить последнюю диктовку»"),
     ("Stop when the call ends", "Останавливать по окончании звонка"),

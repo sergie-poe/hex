@@ -125,10 +125,11 @@ pub enum Feature {
     CapsLockDictation,
     FinishWithReturn,
     SendAfterPasting,
+    AppTracking,
 }
 
 impl Feature {
-    pub const ALL: [Self; 61] = [
+    pub const ALL: [Self; 62] = [
         Self::Meetings,
         Self::VoiceFilter,
         Self::Playground,
@@ -190,6 +191,7 @@ impl Feature {
         Self::CapsLockDictation,
         Self::FinishWithReturn,
         Self::SendAfterPasting,
+        Self::AppTracking,
     ];
 
     /// The features this OS and build have.
@@ -275,6 +277,7 @@ impl Feature {
             | Self::GnomeAnnotate
             | Self::FinishWithReturn
             | Self::SendAfterPasting
+            | Self::AppTracking
             | Self::CapsLockDictation => Audience::Everyone,
         }
     }
@@ -338,7 +341,7 @@ impl Feature {
             | Self::FailureNotices
             | Self::TypedText => 20261107,
             Self::GnomeAnnotate | Self::TerminalPasteShortcut => 20261108,
-            Self::FinishWithReturn | Self::SendAfterPasting => 20261105,
+            Self::FinishWithReturn | Self::SendAfterPasting | Self::AppTracking => 20261105,
         }
     }
 
@@ -402,6 +405,7 @@ impl Feature {
             | Self::Screenshots
             | Self::FinishWithReturn
             | Self::SendAfterPasting
+            | Self::AppTracking
             | Self::CapsLockDictation => cfg!(target_os = "macos"),
             Self::KeepOnClipboard | Self::CopyOnly => {
                 cfg!(any(target_os = "macos", target_os = "windows"))
@@ -510,6 +514,7 @@ impl Feature {
             Self::CapsLockDictation => "caps-lock-dictation",
             Self::FinishWithReturn => "finish-with-return",
             Self::SendAfterPasting => "send-after-pasting",
+            Self::AppTracking => "app-tracking",
         }
     }
 
@@ -577,6 +582,7 @@ impl Feature {
             Self::CapsLockDictation => "labs.caps_lock_dictation",
             Self::FinishWithReturn => "labs.finish_with_return",
             Self::SendAfterPasting => "labs.send_after_pasting",
+            Self::AppTracking => "labs.app_tracking",
         }
     }
 
@@ -648,6 +654,7 @@ impl Feature {
             Self::CapsLockDictation => settings.labs.caps_lock_dictation,
             Self::FinishWithReturn => settings.labs.finish_with_return,
             Self::SendAfterPasting => settings.labs.send_after_pasting,
+            Self::AppTracking => settings.labs.app_tracking,
         }
     }
 
@@ -717,6 +724,7 @@ impl Feature {
             &mut labs.caps_lock_dictation,
             &mut labs.finish_with_return,
             &mut labs.send_after_pasting,
+            &mut labs.app_tracking,
         ]
     }
 
@@ -786,6 +794,7 @@ impl Feature {
             Self::CapsLockDictation => settings.labs.caps_lock_dictation = on,
             Self::FinishWithReturn => settings.labs.finish_with_return = on,
             Self::SendAfterPasting => settings.labs.send_after_pasting = on,
+            Self::AppTracking => settings.labs.app_tracking = on,
             // Off, no shortcut keeps a key only the feature allows.
             Self::StandaloneSpecialKeys => {
                 settings.labs.standalone_special_keys = on;
@@ -859,9 +868,10 @@ const TYPED_TEXT: u64 = GNOME_ANNOTATE << 1;
 /// light blinks slowly instead of staying solid.
 const CAPS_LOCK_SLOW_BLINK: u64 = TYPED_TEXT << 1;
 // Bits 43..52 are upstream's; this fork's switches continue above them
-// (53 is Keep cancelled dictations, 56 App tracking).
+// (53 is Keep cancelled dictations).
 const FINISH_WITH_RETURN: u64 = 1 << 54;
 const SEND_AFTER_PASTING: u64 = 1 << 55;
+const APP_TRACKING: u64 = 1 << 56;
 
 /// This process's `labs` switches: unknown until settings load or one is
 /// first read.
@@ -1168,6 +1178,13 @@ pub fn send_after_pasting() -> bool {
     on(SEND_AFTER_PASTING) && Feature::SendAfterPasting.on_this_os()
 }
 
+/// Escape and Return act on a dictation only while the app it started in is
+/// in front (macOS; read by the recognition loop on every pass it arms them).
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn app_tracking() -> bool {
+    on(APP_TRACKING) && Feature::AppTracking.on_this_os()
+}
+
 /// How long the speech model may sit unused before the engine unloads it,
 /// while Labs › Unload model when idle is on.
 pub fn unload_idle() -> Option<std::time::Duration> {
@@ -1356,6 +1373,7 @@ fn encode_where(settings: &LabsSettings, reaches: impl Fn(Feature) -> bool) -> u
             settings.send_after_pasting,
             SEND_AFTER_PASTING,
         ),
+        (Feature::AppTracking, settings.app_tracking, APP_TRACKING),
     ]
     .into_iter()
     .filter(|(feature, on, _)| *on && reaches(*feature))
@@ -1785,6 +1803,22 @@ mod tests {
         assert_eq!(state & FINISH_WITH_RETURN, 0);
         assert_ne!(state & SEND_AFTER_PASTING, 0);
         assert_eq!((state >> MINUTES_SHIFT) & MINUTES_MASK, 24 * 60);
+    }
+
+    #[test]
+    fn app_tracking_is_its_own_bit_and_off_by_default() {
+        let mut labs = LabsSettings::default();
+        assert_eq!(encode_where(&labs, |_| true) & APP_TRACKING, 0);
+        labs.app_tracking = true;
+        labs.send_after_pasting = true;
+        labs.unload_idle_minutes = 24 * 60;
+        let state = encode_where(&labs, |_| true);
+        assert_ne!(state & APP_TRACKING, 0);
+        assert_ne!(state & SEND_AFTER_PASTING, 0);
+        assert_eq!(state & FINISH_WITH_RETURN, 0);
+        assert_eq!((state >> MINUTES_SHIFT) & MINUTES_MASK, 24 * 60);
+        labs.app_tracking = false;
+        assert_eq!(encode_where(&labs, |_| true) & APP_TRACKING, 0);
     }
 
     #[test]

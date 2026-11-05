@@ -149,6 +149,8 @@ pub struct LabsSettings {
     pub finish_with_return: bool,
     /// With `labs.finish_with_return`, a dictation finished that way presses Return after its paste (macOS).
     pub send_after_pasting: bool,
+    /// Escape and Return act on a dictation only in the app it started in (macOS).
+    pub app_tracking: bool,
 }
 
 /// The idle times Labs › Unload model when idle offers, in minutes.
@@ -215,6 +217,7 @@ impl Default for LabsSettings {
             finish_with_return: false,
             send_after_pasting: false,
             groups: std::collections::BTreeMap::new(),
+            app_tracking: false,
         }
     }
 }

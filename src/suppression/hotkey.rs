@@ -133,6 +133,11 @@ pub struct DictationHotkey {
     binding: RuntimeHotkey,
     /// Toggle's cancel shortcut; `None` in Hold mode.
     cancel: Option<RuntimeHotkey>,
+    /// The cancel shortcut is Hex's right now (the listener sets it with the
+    /// tap's, `InputMonitor::set_takes_cancel`). Always true unless Labs ›
+    /// App tracking has the person in another app: then the key is the
+    /// app's, and the machine does not cancel on it either.
+    cancel_armed: bool,
     /// Labs › Finish with Return is armed (the listener sets it with the
     /// tap's, `InputMonitor::set_takes_finish`): a fresh Return finishes a
     /// locked recording. Unarmed, Return does nothing here.
@@ -189,6 +194,7 @@ impl DictationHotkey {
             tap_or_hold: TAP_OR_HOLD,
             binding,
             cancel: None,
+            cancel_armed: true,
             finish_armed: false,
             ignore_before: None,
             stale_keys_neutral_since: None,
@@ -254,6 +260,12 @@ impl DictationHotkey {
     /// Toggle's cancel shortcut, or `None` for no cancel.
     pub fn set_cancel(&mut self, cancel: Option<RuntimeHotkey>) {
         self.cancel = cancel;
+    }
+
+    /// Arms or disarms the cancel shortcut for this machine. Disarmed, it
+    /// never cancels, whatever the state; arming is the default.
+    pub fn set_cancel_armed(&mut self, armed: bool) {
+        self.cancel_armed = armed;
     }
 
     /// Arms or disarms Labs › Finish with Return for this machine. Disarmed,
@@ -667,6 +679,7 @@ impl DictationHotkey {
         // key from the app in front. Hold mode has no cancel.
         if fresh_key_down
             && self.toggle
+            && self.cancel_armed
             && self.is_recording()
             && let InputEvent::Key {
                 code,

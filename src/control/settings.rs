@@ -519,6 +519,11 @@ const KEYS: &[Key] = &[
         "Labs: press Return once after pasting a dictation finished with its shortcut (Hold's release, a locked press) or with Return, if the app that was in front when it started still is (macOS)",
     ),
     key(
+        "labs.app_tracking",
+        Kind::Bool,
+        "Labs: Toggle's cancel key and Finish with Return's Return act on a dictation only while the app it started in is in front; in any other app they are normal keys (macOS)",
+    ),
+    key(
         "labs.gnome_clipboard_restore",
         Kind::Bool,
         "Labs: on Wayland desktops without data-control, such as GNOME, a paste restores the previous clipboard through XWayland while it is already running (Linux)",

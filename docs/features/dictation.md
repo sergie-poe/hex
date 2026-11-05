@@ -1532,6 +1532,7 @@ Idle, or any Hold mode -> Cancel shortcut -> Nothing: it reaches the app
 hex dictation cancel -> Discards whatever records, any mode; idle -> unchanged
 Annotate drawing -> Escape stops drawing first
 Programmatic dictation (local API) -> Its owner cancels through /cancel
+Labs > App tracking on, another app in front -> Cancel shortcut is that app's (see App Tracking)
 ```
 
 Until #786, Escape cancelled the active capture in every mode, then the newest
@@ -1569,6 +1570,7 @@ Labs > Finish with Return (off, macOS)               // dictate.finish-with-retu
   Keypad Enter on a laptop (Fn-Return) -> counts as Enter
   Local-API (programmatic) dictation -> Return is the app's
   Recording a shortcut in Settings -> every key passes, as before
+  Labs > App tracking on, another app in front -> Return is that app's (see App Tracking)
 Labs > Send after pasting (off; works with or without Finish with Return)  // dictate.send-after-pasting
   Dictation finished by its shortcut (Hold's release, a Tap or locked press) or by Return -> Paste lands
     ├── Same app in front as when the dictation started -> Return pressed once (the chat sends)
@@ -1602,6 +1604,40 @@ Checks: `return_finishes_only_a_locked_recording`,
 [parakeet/send.rs](../../src/parakeet/send.rs) (macOS only, not compiled on
 Linux). Not verified: a physical keyboard, a real chat app, or the Return
 pressed after a paste that is slow to land in the target.
+
+### App Tracking
+
+```ts
+Labs > App tracking (off, macOS)                     // dictate.app-tracking
+  Hotkey or `hex dictation start` capture begins -> the app in front is noted (process ID)
+  While it records, every pass of the listener's loop asks which app is in front
+    ├── The app it started in (or either app unknown) -> keys armed, as without the lab:
+    │     Toggle's cancel key (Escape) cancels, Finish with Return's Return finishes, both kept from the app
+    └── Any other app (Hex's own window too) -> both keys are that app's:
+          not swallowed, no cancel, no finish, the recording goes on
+  Back in the starting app -> armed again on the next pass
+  Unchanged in every app: the dictation shortcut (finishes a locked or held recording),
+    `hex dictation stop|cancel`, Paste Last, Annotate
+  Lab off -> today's behaviour; nothing asks which app is in front
+```
+
+The one arming pass that serves [Toggle cancel](#toggle-cancel) and
+[Finish with Return](#finish-with-return) (`Hotkeys::arm_keys` in
+`recognition/finish.rs`) gives each key one decision for both halves: the
+shortcut machines act on it only when armed (`DictationHotkey::set_cancel_armed`,
+`set_finish_armed`), and the event tap swallows it only when armed
+(`InputMonitor::set_takes_cancel`, `set_takes_finish`). The tap alone drops
+the cancel key from its own matching, but the machine saw every key either
+way, so the machine is disarmed too. `Hotkeys::start_app` is noted at capture
+start while Finish with Return or App tracking is on.
+Source: [recognition/finish.rs](../../src/recognition/finish.rs),
+[suppression/hotkey.rs](../../src/suppression/hotkey.rs).
+Checks: `the_keys_are_armed_in_the_start_app_and_unknown_apps_only` in
+[recognition/finish.rs](../../src/recognition/finish.rs);
+`a_disarmed_cancel_shortcut_cancels_nothing` and
+`return_finishes_only_a_locked_recording` (its unarmed half) in
+[suppression/tests.rs](../../src/suppression/tests.rs). Not verified: a real
+app switch on a Mac.
 
 ### Feedback
 

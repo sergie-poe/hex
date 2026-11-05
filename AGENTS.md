@@ -45,8 +45,9 @@ alone), Playground (Dev), Live text, Live chapters, Vocabulary biasing, Switch
 model with keyboard language (#216), Mouse shortcuts (#209, macOS), Also
 pause the browser (#301, macOS), Share dictation shortcut (#176, Windows),
 Unload model when idle (#442), Terminal paste (Windows), Terminal paste
-shortcut (Windows, Linux), and Finish with Return and Send after pasting
-(#1104, macOS). Externally contributed features land there too.
+shortcut (Windows, Linux), Finish with Return and Send after pasting (#1104,
+macOS), and App tracking (#1386, macOS). Externally contributed features land
+there too.
 Annotate is a normal feature in every build, stable included, on macOS,
 Linux, and Windows; only developer tools (`dev_build::is_dev_build()` with
 `DEVELOPER_FEATURES_ENABLED`) stay gated to dev builds.
@@ -758,6 +759,13 @@ CoreAudio formats, AppleScript details, or event serialization.
   locked press) or by Return presses Return once after its paste lands, only
   if the app it started in (`Hotkeys::start_app`) is still in front;
   `hex dictation stop` and local-API dictations never send.
+- With Labs › App tracking on (macOS), Toggle's cancel key (and a Caps Lock
+  capture's Escape) and Finish with Return's Return are Hex's only while the
+  app the dictation started in is in front (`Hotkeys::arm_keys`, which disarms the shortcut machines and the
+  event tap together, so the key is neither swallowed nor acted on); in any
+  other app they are normal keys and the recording goes on. An unknown app
+  leaves them armed. The dictation shortcut, `hex dictation` commands, Paste
+  Last, and Annotate are unaffected.
 - A dictation discarded for silence (level under the silence threshold, or no
   speech the detector hears) is discarded quietly on every OS: no error tone,
   no note, nothing in Settings. The log keeps the measured level and peak

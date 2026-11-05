@@ -130,6 +130,8 @@ const TRANSLATIONS: &[(&str, &str)] = &[
     ("Return finishes a tapped or locked dictation and pastes it, like the shortcut's second tap", "Return conclui um ditado iniciado com toque ou travado e o cola, como o segundo toque do atalho"),
     ("Send after pasting", "Enviar após colar"),
     ("Hex presses Return after pasting, so a chat box sends the message, if you're still in the app where you started", "O Hex pressiona Return depois de colar, para que um chat envie a mensagem, se você ainda estiver no app onde começou"),
+    ("App tracking", "Rastreamento de app"),
+    ("Escape and Return act on a dictation only in the app where you started it", "Escape e Return agem sobre um ditado apenas no app em que você o iniciou"),
     ("Copy recent dictations", "Copiar ditados recentes"),
     ("Copy one of your last five dictations from the menu bar, under Paste Last Dictation", "Copie um dos seus últimos cinco ditados pela barra de menus, abaixo de Colar último ditado"),
     ("Record your screen, draw on it, and talk over it", "Grave a tela, desenhe sobre ela e fale enquanto isso"),

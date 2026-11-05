@@ -137,6 +137,7 @@ Feature             Pane  Toggle (settings.json, hex settings)   On: what it doe
 │                                        macOS keeps its screen-recording dot lit the whole time it is on
 ├── Finish with Return no labs.finish_with_return        (macOS) Return (or keypad Enter, no modifier) finishes a locked dictation and pastes it, like the shortcut's second tap (#1104)
 ├── Send after pasting no labs.send_after_pasting         (macOS) after a dictation finished by its shortcut or by Return pastes, Hex presses Return once, in the app the dictation started in, so a chat sends (#1104)
+├── App tracking    no    labs.app_tracking            (macOS) Escape (the cancel key) and Return (Finish with Return) act on a dictation only while the app it started in is in front (#1386)
 └── Terminal paste  no    paste_with_shift             (Windows) paste with Ctrl+Shift+V (#477/#478; Linux keeps it in General);
                                          Java games (javaw/java, e.g. Minecraft) still get Ctrl+V (#1362)
                                          // check: terminal_paste_sends_plain_control_v_to_java_games (windows/paste.rs)
@@ -1403,6 +1404,21 @@ Checks: `finish_with_return_and_send_after_pasting_are_their_own_bits_and_off_by
 in [labs.rs](../../src/labs.rs) and the tests listed in dictation.md. The
 Labs page goldens need regenerating on Linux with the rows (they are macOS
 only, so a Linux render is unchanged).
+
+App tracking (`app-tracking`, issue 1386, macOS only, category Dictation):
+the simple version. While a dictation records, Toggle's cancel key and Finish
+with Return's Return act on it only while the app it started in is in front;
+in any other app (Hex's own window counts) they are normal keys: not
+swallowed, no cancel, no finish, and the recording goes on. Switching back
+re-arms them on the next pass. App-level only (the process ID), no per-key
+settings. Details in [dictation.md](dictation.md#app-tracking)
+(`dictate.app-tracking`). Off by default; the gate is `labs::app_tracking()`,
+read on every pass of the listener's loop while a dictation records
+(`Hotkeys::arm_keys` in `recognition/finish.rs`); with the lab off, nothing
+asks which app is in front. Checks: `app_tracking_is_its_own_bit_and_off_by_default`
+in [labs.rs](../../src/labs.rs) and the tests listed in dictation.md. The
+Labs page goldens need regenerating on Linux with the row (macOS only, so a
+Linux render is unchanged).
 
 Movable meeting capsules (`movable-meeting-capsules`, issue 1093, macOS
 like Meetings; its row shows wherever Meetings does, in macOS builds): for

@@ -64,6 +64,7 @@ impl Feature {
             | Self::SettingsSearch
             | Self::FinishWithReturn
             | Self::SendAfterPasting
+            | Self::AppTracking
             | Self::Playground => Group::Dictation,
             Self::SmartSpacing
             | Self::SpokenFormatting

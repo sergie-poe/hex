@@ -2543,6 +2543,41 @@ fn the_cancel_shortcut_discards_only_a_toggled_recording() {
     assert!(hotkey.is_recording());
 }
 
+/// Labs › App tracking: a disarmed cancel shortcut (the person is in another
+/// app) does not cancel the recording, locked or held; armed again, the same
+/// recording answers it.
+#[test]
+fn a_disarmed_cancel_shortcut_cancels_nothing() {
+    let now = capture_time();
+    let ms = |ms| now + Duration::from_millis(ms);
+    let escape = |down| key(ESCAPE_KEY_CODE, down, NO_FLAGS);
+    let mut hotkey = DictationHotkey::with_binding(false, now, true, shift_space_binding());
+    hotkey.set_toggle(true);
+    hotkey.set_cancel(Some(HotkeyBinding::cancel_default().runtime()));
+
+    // Held: disarmed Escape is nothing.
+    hotkey.process(shift_space_event(true), now);
+    hotkey.set_cancel_armed(false);
+    assert_eq!(hotkey.process(escape(true), ms(300)), None);
+    assert_eq!(hotkey.process(escape(false), ms(320)), None);
+    assert!(hotkey.is_recording());
+
+    // Locked: still nothing, and the recording goes on.
+    hotkey.process(shift_space_event(false), ms(400));
+    assert!(hotkey.is_locked());
+    assert_eq!(hotkey.process(escape(true), ms(1_000)), None);
+    assert_eq!(hotkey.process(escape(false), ms(1_020)), None);
+    assert!(hotkey.is_locked());
+
+    // Back in the app it started in: Escape cancels it.
+    hotkey.set_cancel_armed(true);
+    assert_eq!(
+        hotkey.process(escape(true), ms(2_000)),
+        Some(HotkeyAction::CancelShortcut)
+    );
+    assert!(!hotkey.is_recording());
+}
+
 /// The tap keeps the cancel key from the app only while the listener
 /// arms it (a toggled recording runs).
 #[test]

@@ -546,6 +546,12 @@ fn rows(ui: &Ui) -> Vec<Row> {
                 tr("Send after pasting"),
                 tr("Hex presses Return after pasting, so a chat box sends the message, if you're still in the app where you started"),
             ));
+            rows.push(row(
+                Feature::AppTracking,
+                Some(&KEYBOARD),
+                tr("App tracking"),
+                tr("Escape and Return act on a dictation only in the app where you started it"),
+            ));
             // macOS's menu-bar menu lists them.
             rows.push(row(
                 Feature::RecentDictations,
@@ -856,6 +862,7 @@ fn row_key(lab: Lab) -> &'static str {
         Feature::ExpireMeetingAudio => "lab-expire-meeting-audio",
         Feature::FinishWithReturn => "lab-finish-with-return",
         Feature::SendAfterPasting => "lab-send-after-pasting",
+        Feature::AppTracking => "lab-app-tracking",
     }
 }
 
