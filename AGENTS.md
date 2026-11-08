@@ -753,9 +753,11 @@ CoreAudio formats, AppleScript details, or event serialization.
   the shortcut machines and the event tap, so a disarmed Return is neither
   swallowed nor acted on; it is never armed while a Tap press is held, idle,
   or during a programmatic dictation, and a cancel shortcut bound to Return
-  wins. With Labs › Send after pasting also on, a dictation finished by Return
-  presses Return once after its paste lands, only if the app it started in
-  (`Hotkeys::start_app`) is still in front.
+  wins. With Labs › Send after pasting on (with or without Finish with
+  Return), a dictation finished by its shortcut (Hold's release, a Tap or
+  locked press) or by Return presses Return once after its paste lands, only
+  if the app it started in (`Hotkeys::start_app`) is still in front;
+  `hex dictation stop` and local-API dictations never send.
 - A dictation discarded for silence (level under the silence threshold, or no
   speech the detector hears) is discarded quietly on every OS: no error tone,
   no note, nothing in Settings. The log keeps the measured level and peak

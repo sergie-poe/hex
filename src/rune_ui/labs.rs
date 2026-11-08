@@ -544,7 +544,7 @@ fn rows(ui: &Ui) -> Vec<Row> {
                 Feature::SendAfterPasting,
                 Some(&KEYBOARD),
                 tr("Send after pasting"),
-                tr("With Finish with Return, Hex presses Return after pasting, so a chat box sends the message"),
+                tr("Hex presses Return after pasting, so a chat box sends the message, if you're still in the app where you started"),
             ));
             // macOS's menu-bar menu lists them.
             rows.push(row(

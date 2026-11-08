@@ -1165,7 +1165,7 @@ pub fn finish_with_return() -> bool {
 /// submitted).
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub fn send_after_pasting() -> bool {
-    on(SEND_AFTER_PASTING) && Feature::SendAfterPasting.on_this_os() && finish_with_return()
+    on(SEND_AFTER_PASTING) && Feature::SendAfterPasting.on_this_os()
 }
 
 /// How long the speech model may sit unused before the engine unloads it,

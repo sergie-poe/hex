@@ -166,7 +166,7 @@ impl Feature {
                 "Return finishes a tapped or locked dictation and pastes it, like the shortcut's second tap"
             }
             Self::SendAfterPasting => {
-                "With Finish with Return, Hex presses Return after pasting, so a chat box sends the message"
+                "Hex presses Return after pasting, so a chat box sends the message, if you're still in the app where you started"
             }
         }
     }

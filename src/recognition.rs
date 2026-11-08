@@ -1470,7 +1470,7 @@ fn handle_hotkey_action(
             emit_state(events, true, device)
         }
         // Return finishes a locked dictation exactly as the shortcut's own
-        // press does; only Send after pasting tells them apart.
+        // press does, and either may be followed by Send after pasting.
         HotkeyAction::Finish | HotkeyAction::FinishShortcut => finish_hotkey_dictation(
             action_at,
             dictation,

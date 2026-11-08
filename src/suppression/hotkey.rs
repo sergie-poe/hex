@@ -15,8 +15,7 @@ pub enum HotkeyAction {
     /// Toggle's cancel shortcut discarded the recording.
     CancelShortcut,
     /// Labs › Finish with Return: Return finished a locked recording, as
-    /// the shortcut's own press would (`Finish`), but this one may be
-    /// followed by Labs › Send after pasting.
+    /// the shortcut's own press would (`Finish`).
     FinishShortcut,
     PasteLast,
     PasteMeeting,

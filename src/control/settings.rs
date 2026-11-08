@@ -516,7 +516,7 @@ const KEYS: &[Key] = &[
     key(
         "labs.send_after_pasting",
         Kind::Bool,
-        "Labs: with labs.finish_with_return, press Return once after pasting a dictation finished with Return, if the app that was in front when it started still is (macOS)",
+        "Labs: press Return once after pasting a dictation finished with its shortcut (Hold's release, a locked press) or with Return, if the app that was in front when it started still is (macOS)",
     ),
     key(
         "labs.gnome_clipboard_restore",

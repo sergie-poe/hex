@@ -1569,10 +1569,11 @@ Labs > Finish with Return (off, macOS)               // dictate.finish-with-retu
   Keypad Enter on a laptop (Fn-Return) -> counts as Enter
   Local-API (programmatic) dictation -> Return is the app's
   Recording a shortcut in Settings -> every key passes, as before
-Labs > Send after pasting (off, with Finish with Return)  // dictate.send-after-pasting
-  Dictation finished by Return -> Paste lands
+Labs > Send after pasting (off; works with or without Finish with Return)  // dictate.send-after-pasting
+  Dictation finished by its shortcut (Hold's release, a Tap or locked press) or by Return -> Paste lands
     ├── Same app in front as when the dictation started -> Return pressed once (the chat sends)
     └── Another app in front, Copy dictation only, empty or cancelled -> nothing; the log says why
+  hex dictation stop, a local-API dictation -> never sends
   Next dictation -> starts a new message (not joined onto the sent one)
 ```
 
@@ -1582,7 +1583,7 @@ and the event tap (it swallows Return only when armed *and* a dictation is
 locked), so disarming it stops both the swallow and the finish
 (`recognition/finish.rs`). The app a capture started in
 (`Hotkeys::start_app`, its process ID) is noted when a hotkey or
-`hex dictation start` capture begins while the lab is on, and rides the job
+`hex dictation start` capture begins while either lab is on, and rides the job
 (`JobControl::send_to`) to the output worker, which presses Return
 (`keyboard::post_return`, marked synthetic so Hex's taps ignore it) after
 the paste and bumps the input activity so the next paste is not joined onto it.

@@ -126,7 +126,7 @@ const TRANSLATIONS: &[(&str, &str)] = &[
     ("Finish with Return", "Terminer avec Entrée"),
     ("Return finishes a tapped or locked dictation and pastes it, like the shortcut's second tap", "Entrée termine une dictée lancée par appui ou verrouillée et la colle, comme le second appui du raccourci"),
     ("Send after pasting", "Envoyer après le collage"),
-    ("With Finish with Return, Hex presses Return after pasting, so a chat box sends the message", "Avec Terminer avec Entrée, Hex appuie sur Entrée après le collage, et une zone de discussion envoie le message"),
+    ("Hex presses Return after pasting, so a chat box sends the message, if you're still in the app where you started", "Hex appuie sur Entrée après le collage, pour qu'une discussion envoie le message, si vous êtes toujours dans l'app où vous avez commencé"),
     ("Copy recent dictations", "Copier les dictées récentes"),
     ("Copy one of your last five dictations from the menu bar, under Paste Last Dictation", "Copiez l'une de vos cinq dernières dictées depuis la barre des menus, sous Coller la dernière dictée"),
     ("Stop when the call ends", "Arrêter à la fin de l'appel"),

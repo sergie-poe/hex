@@ -136,7 +136,7 @@ Feature             Pane  Toggle (settings.json, hex settings)   On: what it doe
 │                                        keeps a rolling 15 s SCClipBufferingOutput screen buffer for hex capture replay and the replay shortcut;
 │                                        macOS keeps its screen-recording dot lit the whole time it is on
 ├── Finish with Return no labs.finish_with_return        (macOS) Return (or keypad Enter, no modifier) finishes a locked dictation and pastes it, like the shortcut's second tap (#1104)
-├── Send after pasting no labs.send_after_pasting         (macOS) with Finish with Return, Hex presses Return once after that paste, in the app the dictation started in, so a chat sends (#1104)
+├── Send after pasting no labs.send_after_pasting         (macOS) after a dictation finished by its shortcut or by Return pastes, Hex presses Return once, in the app the dictation started in, so a chat sends (#1104)
 └── Terminal paste  no    paste_with_shift             (Windows) paste with Ctrl+Shift+V (#477/#478; Linux keeps it in General);
                                          Java games (javaw/java, e.g. Minecraft) still get Ctrl+V (#1362)
                                          // check: terminal_paste_sends_plain_control_v_to_java_games (windows/paste.rs)
@@ -1392,12 +1392,13 @@ Double-tap, and `hex dictation start`) exactly as the locked second tap does:
 the same release tail, the same Paste or Dictate-without-processing target
 (the capture's own), the same tones and HUD. Details in
 [dictation.md](dictation.md#finish-with-return) (`dictate.finish-with-return`).
-Send after pasting does nothing without it: a dictation finished by Return
-presses Return once after its paste lands, if the app the dictation started
-in is still in front (`dictate.send-after-pasting`). Both rows are off by
+Send after pasting stands on its own: a dictation finished by its shortcut
+(Hold's release, a Tap or locked press) or by Return presses Return once
+after its paste lands, if the app the dictation started in is still in front
+(`dictate.send-after-pasting`), so a mouse or one-handed shortcut can send too. Both rows are off by
 default; the gates are `labs::finish_with_return()` (read on every pass of
 the listener's loop, `recognition/finish.rs`) and `labs::send_after_pasting()`
-(read when Return finishes a dictation). Off, Return is never touched.
+(read when a shortcut or Return finishes a dictation). Off, Return is never touched.
 Checks: `finish_with_return_and_send_after_pasting_are_their_own_bits_and_off_by_default`
 in [labs.rs](../../src/labs.rs) and the tests listed in dictation.md. The
 Labs page goldens need regenerating on Linux with the rows (they are macOS
